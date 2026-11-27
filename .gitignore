@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Stockfish скачивается автоматически (python get_stockfish.py), exe > 100 МБ
+engine/
+
+# Сохранённые партии (Auto, Virtual Game Review)
+*.pgn
+
+# Личная калибровка под конкретный сайт/набор фигур
+calibration.npz
+
+# Настройки локальных инструментов
+.claude/
+.vscode/
+.idea/
+chessvision/data/openings_index.tsv
