@@ -22,6 +22,7 @@ import urllib.request
 import chess
 
 from . import __version__
+from .i18n import tr
 from .openings import DATA, OpeningBook, _key
 
 BOOKS = {"masters": "Lichess: мастера", "lichess": "Lichess: игроки 2000+",
@@ -99,7 +100,7 @@ class Book:
             or data.get("opening")
         if op:
             self.opening = f"{op['eco']} {op['name']}"
-        return move, BOOKS[self.source]
+        return move, tr(BOOKS[self.source])
 
     def _fetch(self, fen):
         if fen in self._cache:
@@ -117,11 +118,11 @@ class Book:
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
                     data = json.load(r)
             except urllib.error.HTTPError as e:
-                self.online_error = {429: "lichess ограничил запросы (429)",
-                                     401: "нужен токен LICHESS_TOKEN"}.get(e.code, f"HTTP {e.code}")
+                self.online_error = {429: tr("lichess ограничил запросы (429)"),
+                                     401: tr("нужен токен LICHESS_TOKEN")}.get(e.code, f"HTTP {e.code}")
                 return None
             except (urllib.error.URLError, OSError, ValueError) as e:
-                self.online_error = f"нет связи с lichess ({getattr(e, 'reason', e)})"
+                self.online_error = tr("нет связи с lichess ({reason})", reason=getattr(e, 'reason', e))
                 return None
             time.sleep(0.2)                # вежливая пауза между запросами
         self._cache[fen] = data
@@ -155,14 +156,14 @@ class Book:
         name = book.name(child)
         if name:
             self.opening = name
-        return move, BOOKS["local"]
+        return move, tr(BOOKS["local"])
 
     def status(self) -> str:
         if self.source == "off":
-            return "без книги"
+            return tr("без книги")
         if self.online_error and self.source in URLS:
-            return f"{BOOKS['local']} ({self.online_error})"
-        return BOOKS[self.source]
+            return f"{tr(BOOKS['local'])} ({self.online_error})"
+        return tr(BOOKS[self.source])
 
 
 def _line_counts(path=DATA) -> Counter:

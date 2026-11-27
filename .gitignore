@@ -10,6 +10,9 @@ engine/
 # Сохранённые партии (Auto, Virtual Game Review)
 *.pgn
 
+# Личные настройки (язык интерфейса)
+settings.json
+
 # Личная калибровка под конкретный сайт/набор фигур
 calibration.npz
 

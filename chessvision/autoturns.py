@@ -8,6 +8,7 @@ import chess
 import chess.pgn
 
 from .explorer import Book
+from .i18n import tr
 from .selfplay import SelfPlay
 
 
@@ -15,10 +16,11 @@ def run(engine_path: str, fen=None, book="masters", book_mode="random", move_tim
         pgn_path=None) -> int:
     board = chess.Board(fen) if fen else chess.Board()
     if board.is_game_over():
-        print("Партия в этой позиции уже окончена.")
+        print(tr("Партия в этой позиции уже окончена."))
         return 1
     bk = Book(book, book_mode)
-    print(f"Auto-ходы: книга — {bk.status()}, затем Stockfish ({move_time:g} с на ход). Ctrl+C — стоп.",
+    print(tr("Auto-ходы: книга — {book}, затем Stockfish ({sec:g} с на ход). Ctrl+C — стоп.",
+             book=bk.status(), sec=move_time),
           flush=True)
 
     last_opening = [None]
@@ -41,14 +43,15 @@ def run(engine_path: str, fen=None, book="masters", book_mode="random", move_tim
     except KeyboardInterrupt:
         sp.stop()
         sp.join(5)
-        print("\nОстановлено.")
+        print("\n" + tr("Остановлено."))
 
     if bk.online_error and book in ("masters", "lichess"):
-        print(f"Внимание: {bk.online_error} — дебют доигран по локальной базе.")
+        print(tr("Внимание: {error} — дебют доигран по локальной базе.", error=bk.online_error))
     if sp.error:
         print(sp.error)
     final, sans, _, result = sp.snapshot()
-    print(f"\nИтог: {result or 'не доиграно'}  ·  из книги {sp.book_plies} полуходов, всего {len(sans)}")
+    print("\n" + tr("Итог: {result}  ·  из книги {book} полуходов, всего {total}",
+                    result=result or tr("не доиграно"), book=sp.book_plies, total=len(sans)))
     print(sp.pgn_moves())
 
     if pgn_path:
@@ -67,5 +70,5 @@ def run(engine_path: str, fen=None, book="masters", book_mode="random", move_tim
             node = node.add_variation(move)
         with open(pgn_path, "w", encoding="utf-8") as f:
             print(game, file=f)
-        print(f"PGN сохранён: {pgn_path}")
+        print(tr("PGN сохранён: {path}", path=pgn_path))
     return 0 if not sp.error else 1

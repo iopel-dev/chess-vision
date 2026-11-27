@@ -15,6 +15,7 @@ import os
 import time
 
 from . import winutil
+from .i18n import tr
 
 BROWSER_EXES = frozenset(name.lower() for name in (
     # Chromium
@@ -96,7 +97,7 @@ def _browser_window(hwnd):
         return exe
     cls = window_class(hwnd)
     if cls.startswith(BROWSER_CLASS_PREFIXES):
-        return f"{exe or 'окно'} ({cls})"
+        return f"{exe or 'window'} ({cls})"
     return None
 
 
@@ -135,7 +136,7 @@ def blocked_region(region):
     if not ENABLED:
         return None
     if not winutil.IS_WIN:
-        return UNSUPPORTED
+        return tr(UNSUPPORTED)
     x, y, s, _ = region
     points = [(x + s * fx, y + s * fy) for fx, fy in ((.5, .5), (.2, .2), (.8, .2), (.2, .8), (.8, .8))]
     tops = winutil.top_windows_at(points)

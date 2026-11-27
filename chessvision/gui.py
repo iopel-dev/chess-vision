@@ -4,12 +4,13 @@ from tkinter import ttk
 
 import chess
 
-from . import __version__, config, winutil
+from . import __version__, config, i18n, winutil
 from .engine import EngineWorker
 from .overlay import Overlay
 from .scanner import Scanner
 from .explorer import BOOKS, Book
-from .selfplay import SPEEDS, SelfPlay
+from .i18n import tr
+from .selfplay import SPEED_NAMES, SPEEDS, SelfPlay
 
 SQ = 64
 LIGHT, DARK = "#eeeed2", "#769656"
@@ -19,13 +20,13 @@ PIECE_FONT = ("Segoe UI Symbol", int(SQ * 0.62))
 
 
 def verdict_text(j) -> str:
-    who = "белые" if j["white"] else "чёрные"
+    who = tr("белые") if j["white"] else tr("чёрные")
     kind = j["kind"]
-    text = f"{j['san']}{config.MARK_SIGNS[kind]} ({who}): {config.MARK_NAMES[kind]}"
+    text = f"{j['san']}{config.MARK_SIGNS[kind]} ({who}): {tr(config.MARK_NAMES[kind])}"
     if kind in config.MARK_ARROW:
-        text += ", допускает мат" if j.get("mate") else f", −{j['loss']:.1f}"
+        text += tr(", допускает мат") if j.get("mate") else f", −{j['loss']:.1f}"
     elif kind == "brilliant" and j.get("sac"):
-        text += f" — жертва {j['sac']} пешк{'и' if j['sac'] < 5 else 'ек'}"
+        text += tr(" — жертва {n} пешки" if j["sac"] < 5 else " — жертва {n} пешек", n=j["sac"])
     elif kind == "book" and j.get("opening"):
         text += f": {j['opening']}"
     return text
@@ -47,7 +48,7 @@ class RegionSelector:
         self.c.pack(fill="both", expand=True)
         self.c.create_text(w // 2 - left if left < 0 else w // 2, 40, fill="white",
                            font=("Segoe UI", 20, "bold"),
-                           text="Выделите доску мышью  (Esc — отмена)")
+                           text=tr("Выделите доску мышью  (Esc — отмена)"))
         self.start = None
         self.rect = None
         self.c.bind("<ButtonPress-1>", self._press)
@@ -72,6 +73,36 @@ class RegionSelector:
         self.win.destroy()
         if w > 40 and h > 40:
             self.callback((x0, y0, w, h))
+
+
+class Choice:
+    """Выпадающий список: показывает переведённые подписи, хранит ключ."""
+
+    def __init__(self, parent, labels, key, width, on_change=None):
+        self.labels = dict(labels)            # ключ -> подпись (по-русски, переводится tr)
+        self.key = key
+        self.on_change = on_change
+        self.cb = ttk.Combobox(parent, values=[tr(v) for v in self.labels.values()],
+                               width=width, state="readonly")
+        self.cb.current(list(self.labels).index(key))
+        self.cb.bind("<<ComboboxSelected>>", self._selected)
+
+    def _selected(self, _event):
+        self.key = list(self.labels)[self.cb.current()]
+        if self.on_change:
+            self.on_change(self.key)
+
+    def pack(self, **kw):
+        self.cb.pack(**kw)
+        return self
+
+
+def lang_choice(parent, on_change):
+    """Переключатель «Язык / Language»."""
+    row = ttk.Frame(parent)
+    ttk.Label(row, text="Язык / Language:").pack(side="left")
+    Choice(row, i18n.LANGS, i18n.lang(), 10, on_change).pack(side="left", padx=6)
+    return row
 
 
 def apply_style(root):
@@ -128,7 +159,7 @@ class BoardView:
                               font=("Segoe UI", 8, "bold"), fill=DARK if light else LIGHT)
 
         if board is None:
-            c.create_text(SQ * 4, SQ * 4, text="Доска не распознана", fill="#ffffff",
+            c.create_text(SQ * 4, SQ * 4, text=tr("Доска не распознана"), fill="#ffffff",
                           font=("Segoe UI", 16, "bold"))
             self._draw_eval(None)
             return
@@ -205,8 +236,9 @@ class App(BoardView):
         self.engine_path = engine_path
         self.selfplay = None                  # самоигра на виртуальной доске (кнопка Auto)
         self.review = None                    # окно Virtual Game Review
-        self.sp_speed = tk.StringVar(value="средне")
-        self.sp_book = tk.StringVar(value=BOOKS[getattr(opts, "book", None) or "masters"])
+        self.sp_speed = "medium"              # ключ SPEEDS
+        self.sp_book = getattr(opts, "book", None) or "masters"   # ключ BOOKS
+        self._ui = []                         # виджеты окна (пересоздаются при смене языка)
         self._drawn_key = None
         self._printed_key = None
         self._closed = False
@@ -239,6 +271,7 @@ class App(BoardView):
 
         main = ttk.Frame(self.root, padding=8)
         main.pack(fill="both", expand=True)
+        self._ui = [self.banner, main]
 
         left = ttk.Frame(main)
         left.grid(row=0, column=0, sticky="n")
@@ -253,7 +286,7 @@ class App(BoardView):
 
         self.eval_lbl = ttk.Label(side, text="—", style="Eval.TLabel")
         self.eval_lbl.pack(anchor="w")
-        self.engine_lbl = ttk.Label(side, text="Stockfish: запуск...", foreground="#9e9b98")
+        self.engine_lbl = ttk.Label(side, text=tr("Stockfish: запуск..."), foreground="#9e9b98")
         self.engine_lbl.pack(anchor="w", pady=(0, 6))
 
         self.lines = tk.Text(side, width=44, height=9, bg="#1e1d1b", fg=fg, bd=0,
@@ -266,12 +299,12 @@ class App(BoardView):
 
         btns = ttk.Frame(side)
         btns.pack(fill="x", pady=8)
-        b = [("Найти доску", lambda: self.scanner.command("detect")),
-             ("Выделить вручную", self._select_region),
-             ("Калибровка", lambda: self.scanner.command("calibrate")),
-             ("Перевернуть", lambda: self.scanner.command("flip")),
-             ("Сейчас ход белых", lambda: self.scanner.command("turn", chess.WHITE)),
-             ("Сейчас ход чёрных", lambda: self.scanner.command("turn", chess.BLACK))]
+        b = [(tr("Найти доску"), lambda: self.scanner.command("detect")),
+             (tr("Выделить вручную"), self._select_region),
+             (tr("Калибровка"), lambda: self.scanner.command("calibrate")),
+             (tr("Перевернуть"), lambda: self.scanner.command("flip")),
+             (tr("Сейчас ход белых"), lambda: self.scanner.command("turn", chess.WHITE)),
+             (tr("Сейчас ход чёрных"), lambda: self.scanner.command("turn", chess.BLACK))]
         for i, (t, cmd) in enumerate(b):
             ttk.Button(btns, text=t, command=cmd).grid(row=i // 2, column=i % 2, sticky="ew", padx=2, pady=2)
         btns.columnconfigure(0, weight=1)
@@ -279,33 +312,55 @@ class App(BoardView):
 
         opts = ttk.Frame(side)
         opts.pack(fill="x")
-        ttk.Checkbutton(opts, text="Подсветка поверх экрана", variable=self.overlay_on).pack(anchor="w")
-        ttk.Checkbutton(opts, text="Пауза", variable=self.paused,
+        ttk.Checkbutton(opts, text=tr("Подсветка поверх экрана"), variable=self.overlay_on).pack(anchor="w")
+        ttk.Checkbutton(opts, text=tr("Пауза"), variable=self.paused,
                         command=lambda: self.scanner.command("pause", self.paused.get())).pack(anchor="w")
         row = ttk.Frame(opts)
         row.pack(anchor="w", pady=4)
-        ttk.Label(row, text="Лучших ходов:").pack(side="left")
+        ttk.Label(row, text=tr("Лучших ходов:")).pack(side="left")
         tk.Spinbox(row, from_=1, to=5, width=3, textvariable=self.multipv,
                    command=lambda: self.engine.set_multipv(self.multipv.get())).pack(side="left", padx=4)
 
         sp = ttk.Frame(opts)
         sp.pack(anchor="w", fill="x", pady=(6, 0))
-        self.sp_btn = ttk.Button(sp, text="\u25b6 Auto (самоигра)", command=self._toggle_selfplay)
+        self.sp_btn = ttk.Button(sp, text=self._sp_btn_text(), command=self._toggle_selfplay)
         self.sp_btn.pack(side="left")
-        ttk.Combobox(sp, textvariable=self.sp_speed, values=list(SPEEDS), width=9,
-                     state="readonly").pack(side="left", padx=6)
+        Choice(sp, SPEED_NAMES, self.sp_speed, 9,
+               lambda k: setattr(self, "sp_speed", k)).pack(side="left", padx=6)
         ttk.Button(opts, text="Virtual Game Review", command=self._open_review).pack(anchor="w", pady=(6, 0))
         bk = ttk.Frame(opts)
         bk.pack(anchor="w", fill="x", pady=(4, 0))
-        ttk.Label(bk, text="Дебюты:").pack(side="left")
-        ttk.Combobox(bk, textvariable=self.sp_book, values=list(BOOKS.values()), width=20,
-                     state="readonly").pack(side="left", padx=6)
+        ttk.Label(bk, text=tr("Дебюты:")).pack(side="left")
+        Choice(bk, BOOKS, self.sp_book, 20,
+               lambda k: setattr(self, "sp_book", k)).pack(side="left", padx=6)
+        lang_choice(opts, self._set_lang).pack(anchor="w", pady=(6, 0))
 
         self.status = ttk.Label(side, text="", wraplength=330, foreground="#c9c6c2")
         self.status.pack(anchor="w", pady=(8, 0))
         ttk.Label(side, wraplength=330, foreground="#7d7a77",
-                  text="Калибровка: откройте новую партию (начальная расстановка) — "
-                       "программа запомнит фигуры этой программы.").pack(anchor="w", pady=(8, 0))
+                  text=tr("Калибровка: откройте новую партию (начальная расстановка) — "
+                          "программа запомнит фигуры этой программы.")).pack(anchor="w", pady=(8, 0))
+
+    def _set_lang(self, code):
+        """Смена языка: сохраняем выбор и пересоздаём окна."""
+        i18n.set_lang(code, save=True)
+        self.root.after(10, self._rebuild)      # не из обработчика списка, который сейчас удалим
+
+    def _rebuild(self):
+        if self._closed:
+            return
+        if self.window:
+            for w in self._ui:
+                w.destroy()
+            self._build()
+        self._drawn_key = None
+        if self.review is not None and not self.review._closed:
+            self.review.rebuild()
+
+    def _sp_btn_text(self):
+        if self.selfplay is None:
+            return tr("\u25b6 Auto (самоигра)")
+        return tr("\u25a0 Стоп") if self.selfplay.running else tr("\u21a9 К живой доске")
 
     # ---------------- самоигра ----------------
     def _toggle_selfplay(self):
@@ -313,17 +368,16 @@ class App(BoardView):
         if self.selfplay is not None:              # «Стоп» / «К живой доске»
             self.selfplay.stop()
             self.selfplay = None
-            self.sp_btn.config(text="\u25b6 Auto (самоигра)")
+            self.sp_btn.config(text=self._sp_btn_text())
             self._drawn_key = None
             return
         board = self.scanner.snapshot()[0]
         if board is None or board.is_game_over():
-            self.status.config(text="Самоигра: нет позиции для доигрывания (доска не распознана или партия окончена)")
+            self.status.config(text=tr("Самоигра: нет позиции для доигрывания (доска не распознана или партия окончена)"))
             return
-        source = next((k for k, v in BOOKS.items() if v == self.sp_book.get()), "masters")
-        self.selfplay = SelfPlay(self.engine_path, board, SPEEDS[self.sp_speed.get()], book=Book(source))
+        self.selfplay = SelfPlay(self.engine_path, board, SPEEDS[self.sp_speed], book=Book(self.sp_book))
         self.selfplay.start()
-        self.sp_btn.config(text="\u25a0 Стоп")
+        self.sp_btn.config(text=self._sp_btn_text())
         self._drawn_key = None
 
     def _open_review(self):
@@ -331,26 +385,26 @@ class App(BoardView):
         from .review import ReviewWindow
         flipped = self.scanner.snapshot()[2]
         if self.selfplay is not None:
-            (start, moves), title = self.selfplay.game(), "самоигра Auto"
+            (start, moves), title = self.selfplay.game(), tr("самоигра Auto")
         else:
             game = self.scanner.game()
-            (start, moves), title = game or (chess.Board(), []), "партия с доски" if game else "новая партия"
+            (start, moves), title = game or (chess.Board(), []), tr("партия с доски") if game else tr("новая партия")
         if self.review is not None and not self.review._closed:
             self.review.set_game(start, moves, title)
             self.review.win.lift()
             return
         self.review = ReviewWindow(self.engine_path, start, moves, master=self.root, title=title,
-                                   flipped=flipped)
+                                   flipped=flipped, on_lang=self._set_lang)
         self.review.win.attributes("-topmost", True)
 
     def _draw_selfplay(self, flipped):
         sp = self.selfplay
         board, sans, last, result = sp.snapshot()
-        if not sp.running and self.sp_btn.cget("text") != "\u21a9 К живой доске":
-            self.sp_btn.config(text="\u21a9 К живой доске")
-        tail = sp.error or result or "идёт..."
+        if self.sp_btn.cget("text") != self._sp_btn_text():
+            self.sp_btn.config(text=self._sp_btn_text())
+        tail = sp.error or result or tr("идёт...")
         book = sp.book
-        phase = "дебют" if book is not None and not book.out_of_book else "Stockfish"
+        phase = tr("дебют") if book is not None and not book.out_of_book else "Stockfish"
         opening = f"   ≡ {book.opening}" if book is not None and book.opening else ""
         self.banner.config(text=f"Auto ({phase}): {sans[-1] if sans else '...'}   ·   {tail}{opening}")
         key = ("selfplay", board.fen(), len(sans), result, sp.error, flipped, opening)
@@ -362,15 +416,15 @@ class App(BoardView):
         t = self.lines
         t.config(state="normal")
         t.delete("1.0", "end")
-        t.insert("end", f"Самоигра: {len(sans)} полуходов, {sp.move_time:g} с на ход\n", "g0")
+        t.insert("end", tr("Самоигра: {n} полуходов, {sec:g} с на ход", n=len(sans), sec=sp.move_time) + "\n", "g0")
         if book is not None:
-            t.insert("end", f"Книга: {book.status()} · из книги {sp.book_plies} полуходов\n")
+            t.insert("end", tr("Книга: {book} · из книги {n} полуходов", book=book.status(), n=sp.book_plies) + "\n")
             if book.opening:
                 t.insert("end", f"≡ {book.opening}\n", "book")
         t.insert("end", "\n")
         t.insert("end", sp.pgn_moves() + "\n\n")
         if sp.error or result:
-            t.insert("end", (sp.error or f"Итог: {result}") + "\n", "blunder" if sp.error else "g0")
+            t.insert("end", (sp.error or tr("Итог: {result}", result=result)) + "\n", "blunder" if sp.error else "g0")
         t.see("end")
         t.config(state="disabled")
         self.eval_lbl.config(text="Auto")
@@ -408,11 +462,13 @@ class App(BoardView):
             if self.engine.error:
                 self.engine_lbl.config(text=self.engine.error, foreground="#ff6b6b")
             elif res:
-                self.engine_lbl.config(text=f"{self.engine.name} · глубина {res['depth']} · "
-                                            f"{res['nps'] // 1000} kN/s · {config.engine_threads()} потоков")
+                self.engine_lbl.config(text=tr("{name} · глубина {depth} · {knps} kN/s · {threads} потоков",
+                                               name=self.engine.name, depth=res["depth"],
+                                               knps=res["nps"] // 1000, threads=config.engine_threads()))
             else:
-                self.engine_lbl.config(text=f"{self.engine.name} · {config.engine_threads()} потоков, "
-                                            f"{self.engine.options['Hash']} MB хэш")
+                self.engine_lbl.config(text=tr("{name} · {threads} потоков, {hash} MB хэш",
+                                               name=self.engine.name, threads=config.engine_threads(),
+                                               hash=self.engine.options["Hash"]))
 
             key = (board.fen() if board else None, flipped, tuple(m.uci() for m in moves), tuple(marks))
             if key != self._drawn_key:
@@ -435,20 +491,21 @@ class App(BoardView):
         if not res or board is None:
             print(f"[{status}]", flush=True)
             return
-        side = "белых" if board.turn else "чёрных"
         for j in res.get("judged", []):
             if j["kind"] in config.MARK_COLORS:
                 print("  " + verdict_text(j), flush=True)
         best = "   ".join(f"{i + 1}. {l['san'][0] if l['san'] else '?'} ({l['score']})"
                           for i, l in enumerate(res["lines"]))
-        print(f"Ход {side} | глубина {res['depth']:>2} | {best}", flush=True)
+        line = tr("Ход белых | глубина {depth:>2} | {best}") if board.turn else \
+            tr("Ход чёрных | глубина {depth:>2} | {best}")
+        print(line.format(depth=res["depth"], best=best), flush=True)
 
     def _draw_lines(self, board, res):
         t = self.lines
         t.config(state="normal")
         t.delete("1.0", "end")
         if not res:
-            t.insert("end", "Ожидание анализа..." if board is not None else "Нет позиции для анализа")
+            t.insert("end", tr("Ожидание анализа...") if board is not None else tr("Нет позиции для анализа"))
             self.eval_lbl.config(text="—")
             self._draw_eval(None)
         else:

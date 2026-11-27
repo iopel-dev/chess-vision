@@ -1,6 +1,14 @@
 # Changelog
 
-**Language / Язык:** English below, [русский ниже](#150--2026-11-27-ru).
+**Language / Язык:** English below, [русский ниже](#ru).
+
+## 1.6.0 — 2026-11-27
+
+- English interface with a language switch: **Язык / Language** in the program window and in
+  Virtual Game Review (switches instantly) or `--lang en|ru`; the choice is remembered in
+  `settings.json`, by default the Windows display language is used. Console messages and
+  `--help` are translated too.
+- `python -m tests.test_i18n` checks that every interface string has an English translation.
 
 ## 1.5.0 — 2026-11-27
 
@@ -21,7 +29,14 @@ First public release.
 - Browser blacklist in `chessvision/blacklist.py`, off by default (`ENABLED = False`).
 - README in English and Russian with a disclaimer: use at your own risk.
 
-<a id="150--2026-11-27-ru"></a>
+<a id="ru"></a>
+## 1.6.0 — 2026-11-27 (RU)
+
+- Английский интерфейс с выбором языка: переключатель **Язык / Language** в окне программы и в
+  Virtual Game Review (меняется сразу) или `--lang ru|en`; выбор запоминается в `settings.json`,
+  по умолчанию — язык Windows. Сообщения в консоли и `--help` тоже переведены.
+- `python -m tests.test_i18n` проверяет, что у всех строк интерфейса есть английский перевод.
+
 ## 1.5.0 — 2026-11-27 (RU)
 
 Первый публичный выпуск.

@@ -14,6 +14,8 @@ import cv2
 import chess
 import numpy as np
 
+from .i18n import tr
+
 CELL = 64
 CALIB_VERSION = 2
 EMPTY_FRAC = 0.04        # меньше этой доли пикселей силуэта — клетка пустая
@@ -151,13 +153,13 @@ class Recognizer:
         expected = {(r, c) for r in (0, 1, 6, 7) for c in range(8)}
         if occupied != expected:
             raise CalibrationError(
-                f"Доска не в начальной позиции (найдено фигур: {len(occupied)}, "
-                f"на своих местах: {len(occupied & expected)}/32)")
+                tr("Доска не в начальной позиции (найдено фигур: {n}, на своих местах: {ok}/32)",
+                   n=len(occupied), ok=len(occupied & expected)))
         # ориентация: средняя яркость 16 фигур сверху против 16 снизу
         top = np.mean([bright[r, c] for r in (0, 1) for c in range(8)])
         bottom = np.mean([bright[r, c] for r in (6, 7) for c in range(8)])
         if abs(top - bottom) < 10:
-            raise CalibrationError("Не удаётся отличить белые фигуры от чёрных")
+            raise CalibrationError(tr("Не удаётся отличить белые фигуры от чёрных"))
         flipped = top > bottom
         start = chess.Board()
         imgs, ss, pars, syms, wb, bb = [], [], [], [], [], []
@@ -179,7 +181,7 @@ class Recognizer:
         rec = cls(imgs, ss, pars, syms, np.mean(wb), np.mean(bb))
         placement, unknown = rec.read(board_img, flipped)
         if unknown or placement != chess.STARTING_BOARD_FEN:
-            raise CalibrationError("Калибровка не прошла самопроверку — попробуйте ещё раз")
+            raise CalibrationError(tr("Калибровка не прошла самопроверку — попробуйте ещё раз"))
         return rec, flipped
 
     # ---------- распознавание ----------
@@ -228,7 +230,7 @@ class Recognizer:
     def load(cls, path):
         d = np.load(path)
         if "version" not in d or int(d["version"]) != CALIB_VERSION:
-            raise CalibrationError("Калибровка от старой версии программы — нужна новая")
+            raise CalibrationError(tr("Калибровка от старой версии программы — нужна новая"))
         rec = cls(d["imgs"], d["sils"], d["parities"], [str(s) for s in d["symbols"]],
                   float(d["white_ref"]), float(d["black_ref"]))
         return rec, bool(d["flipped"])

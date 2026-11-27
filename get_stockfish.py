@@ -11,6 +11,12 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+try:                                    # язык сообщений — как у программы
+    from chessvision.i18n import tr
+except Exception:                       # запуск отдельно, без пакета рядом
+    def tr(text, **kw):
+        return text.format(**kw) if kw else text
+
 ENGINE_DIR = Path(__file__).resolve().parent / "engine"
 API_URL = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
 BASE_URL = "https://github.com/official-stockfish/Stockfish/releases/latest/download/"
@@ -28,7 +34,7 @@ def _variants() -> list:
         names = [a["name"] for a in rel.get("assets", [])
                  if a["name"].startswith("stockfish-windows-x86-64") and a["name"].endswith(".zip")]
     except Exception as e:
-        print(f"GitHub API недоступен ({e}), пробую стандартные имена")
+        print(tr("GitHub API недоступен ({e}), пробую стандартные имена", e=e))
     if not names:
         names = ["stockfish-windows-x86-64-universal.zip", "stockfish-windows-x86-64-avx2.zip",
                  "stockfish-windows-x86-64.zip"]
@@ -55,28 +61,33 @@ def download() -> Path:
     target = ENGINE_DIR / "stockfish.exe"
     for name in _variants():
         url = BASE_URL + name
-        print(f"Скачиваю {url} ...")
+        print(tr("Скачиваю {url} ...", url=url))
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "stockfish-downloader"})
             data = urllib.request.urlopen(req, timeout=120).read()
         except Exception as e:
-            print(f"  не удалось: {e}")
+            print(tr("  не удалось: {e}", e=e))
             continue
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             exes = [n for n in zf.namelist() if n.lower().endswith(".exe")]
             if not exes:
-                print("  в архиве нет .exe")
+                print(tr("  в архиве нет .exe"))
                 continue
             with zf.open(exes[0]) as src, open(target, "wb") as dst:
                 shutil.copyfileobj(src, dst)
         if _works(target):
-            print(f"Готово: {target} ({name})")
+            print(tr("Готово: {target} ({name})", target=target, name=name))
             return target
-        print("  эта сборка не запускается на вашем CPU, пробую следующую")
-    raise SystemExit("Не удалось скачать рабочий Stockfish. Скачайте вручную: "
-                     "https://stockfishchess.org/download/ и положите exe в папку engine/")
+        print(tr("  эта сборка не запускается на вашем CPU, пробую следующую"))
+    raise SystemExit(tr("Не удалось скачать рабочий Stockfish. Скачайте вручную: "
+                        "https://stockfishchess.org/download/ и положите exe в папку engine/"))
 
 
 if __name__ == "__main__":
+    try:
+        from chessvision import i18n
+        i18n.init(i18n.lang_from_argv(sys.argv[1:]))
+    except Exception:
+        pass
     download()
     sys.exit(0)

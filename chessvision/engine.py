@@ -7,6 +7,7 @@ import chess
 import chess.engine
 
 from . import judge as judging
+from .i18n import tr
 from .openings import OpeningBook
 
 # python-chess ругается на безобидные строки Stockfish вроде 'info string Using 8 threads'
@@ -110,7 +111,7 @@ class EngineWorker:
                 return                     # нормальное завершение (shutdown)
             except Exception as e:
                 restarts += 1
-                self.error = f"Движок перезапускается ({restarts}): {type(e).__name__} {e}".strip()
+                self.error = tr("Движок перезапускается ({n}): {err}", n=restarts, err=f"{type(e).__name__} {e}").strip()
                 with self._cond:
                     self._analysis = None
                     self._gen += 1         # заново проанализировать текущую позицию

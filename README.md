@@ -23,8 +23,9 @@ Finds a chessboard on the screen, builds a virtual copy of it and highlights the
 best Stockfish 19 moves in **green** in real time (NNUE network, all CPU cores,
 large hash).
 
-The program's interface is in Russian; button names below are given in Russian
-with an English translation.
+The interface is available in **English and Russian**: switch it with
+**Язык / Language** in the program window or with `--lang en` / `--lang ru`.
+By default the saved choice is used, otherwise the Windows display language.
 
 ## Getting started
 
@@ -46,6 +47,7 @@ If Stockfish is not found in the `engine/` folder, it is downloaded automaticall
 | `--gdi` | draw highlights directly on the screen with GDI instead of a transparent overlay window |
 | `--external-window [TITLE]` | go through all windows and look for a board in any of them; the window is captured with PrintWindow, so the board is recognized even when its window is covered by others. Highlights follow the window and hide when it is covered. You can give part of the window title: `--external-window Arena` |
 | `--multipv N` | how many best moves to highlight (1–5) |
+| `--lang en\|ru` | interface language (the choice is remembered) |
 | `--auto-turns` | Auto moves in the console: the opening is played move by move from a book, then every move is Stockfish's best move (virtual board, nothing is clicked on any site) |
 | `--book masters\|lichess\|local\|off` | opening book for Auto: `masters` — master games from the internet (Lichess Opening Explorer, default), `lichess` — lichess players rated 2000+ (may need a token in `LICHESS_TOKEN`), `local` — built-in database, no internet, `off` — Stockfish from move one |
 | `--book-mode random\|top` | `random` — move weighted by popularity (a new opening every game), `top` — always the most popular move |
@@ -78,7 +80,7 @@ only frames are drawn, no arrows.
 ## How to use
 
 1. Open a board on the screen — the program finds it by itself
-   (or use **«Выделить вручную»** (Select manually) and drag a frame around the board).
+   (or use **Select manually** and drag a frame around the board).
 2. **Calibration**: once for each program / piece set, open a new game
    (starting position). The program remembers what the pieces look like
    (`calibration.npz`). Orientation (white at the bottom/top) is detected automatically.
@@ -107,13 +109,14 @@ both in the program window and as a transparent layer right over the real board
 
 | Button | What it does |
 |---|---|
-| Найти доску (Find board) | search the whole screen for the board again |
-| Выделить вручную (Select manually) | drag a frame around the board |
-| Калибровка (Calibrate) | force calibration (board in the starting position) |
-| Перевернуть (Flip) | if the orientation was detected wrongly |
-| Сейчас ход белых / чёрных (White / Black to move) | if the program started following mid-game and got the side to move wrong |
-| Лучших ходов (Best moves) | how many variations (MultiPV) to show |
-| ▶ Auto (самоигра, self-play) | plays the current position out for both sides: while the position is in the book — book moves (the «Дебюты» (Openings) list: masters / lichess players from the internet, local database, no book), then Stockfish's best moves. Only on the virtual board in the program window, nothing is clicked on any site. Speed: быстро / средне / медленно (fast / medium / slow — 0.3 / 1 / 3 s per move) |
+| Find board | search the whole screen for the board again |
+| Select manually | drag a frame around the board |
+| Calibrate | force calibration (board in the starting position) |
+| Flip | if the orientation was detected wrongly |
+| White to move / Black to move | if the program started following mid-game and got the side to move wrong |
+| Best moves | how many variations (MultiPV) to show |
+| ▶ Auto (self-play) | plays the current position out for both sides: while the position is in the book — book moves (the **Openings** list: masters / lichess players from the internet, local database, no book), then Stockfish's best moves. Only on the virtual board in the program window, nothing is clicked on any site. Speed: fast / medium / slow (0.3 / 1 / 3 s per move) |
+| Язык / Language | interface language: English / Русский, switches instantly |
 
 ## Virtual Game Review
 
@@ -125,9 +128,9 @@ window (takes the Auto self-play game or the game from the live board) or
 |---|---|
 | ⏮ ◀ ▶ ⏭, keys ← → Home End, mouse wheel | step through the moves; click a move in the list to jump to it |
 | ▶ at the end of the game | play Stockfish's best move |
-| ★ Лучший ход (Best move, B) | play the best move from the current position; if the game had a different move, the continuation is replaced |
-| ⏵ Авто (Auto, Space) | step through the game automatically and, at the end, play it out with best moves (speed: fast / medium / slow) |
-| Открыть / Сохранить PGN (Open / Save PGN), Перевернуть (Flip, F), Новая партия (New game) | |
+| ★ Best move (B) | play the best move from the current position; if the game had a different move, the continuation is replaced |
+| ⏵ Auto (Space) | step through the game automatically and, at the end, play it out with best moves (speed: fast / medium / slow) |
+| Open PGN / Save PGN, Flip (F), New game | |
 
 For every position: a green arrow for the best move, Stockfish's evaluation and
 main line, a mark for the move played (`≡` `★` `!!` `?` `??`) and the opening
@@ -151,6 +154,9 @@ name. The whole game is analysed in the background by a separate Stockfish
 - `chessvision/overlay.py` — transparent window over the screen, excluded from capture.
 - `chessvision/gdi_overlay.py` — drawing directly on the screen with GDI (`--gdi`).
 - `chessvision/winutil.py` — WinAPI: window enumeration, window capture via PrintWindow.
+- `chessvision/i18n.py`, `chessvision/lang_en.py` — interface language: strings are written
+  in Russian and translated with `tr()`; `python -m tests.test_i18n` checks that every string
+  has an English translation.
 - `chessvision/blacklist.py` — browser blacklist, **off by default** (`ENABLED = False`).
   When enabled, boards are not recognized in browser windows: by process name (Chrome,
   Edge, Firefox, Opera, Yandex, Brave, Vivaldi and others), by window class (Chromium /

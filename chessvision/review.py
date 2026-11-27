@@ -18,12 +18,13 @@ import chess
 import chess.engine
 import chess.pgn
 
-from . import __version__, config
+from . import __version__, config, i18n
 from . import judge as judging
 from .engine import format_score
-from .gui import SQ, DARK, BoardView, apply_style, verdict_text
+from .gui import SQ, DARK, BoardView, Choice, apply_style, lang_choice, verdict_text
+from .i18n import tr
 from .openings import OpeningBook
-from .selfplay import REASONS, SPEEDS
+from .selfplay import REASONS, SPEED_NAMES, SPEEDS
 
 ANALYSIS_TIME = 0.4       # секунд Stockfish на каждую позицию партии
 LAST_MOVE = "#4aa3ff"
@@ -118,7 +119,10 @@ class Analyzer(threading.Thread):
 
 
 class ReviewWindow(BoardView):
-    def __init__(self, engine_path, start=None, moves=(), master=None, title="", flipped=False):
+    def __init__(self, engine_path, start=None, moves=(), master=None, title="", flipped=False,
+                 on_lang=None):
+        """on_lang(код) — смена языка из этого окна (по умолчанию — только это окно)."""
+        self.on_lang = on_lang
         self.own_root = master is None
         self.win = tk.Tk() if self.own_root else tk.Toplevel(master)
         self.win.title(f"Virtual Game Review — Chess Vision {__version__}")
@@ -137,7 +141,7 @@ class ReviewWindow(BoardView):
         self._last_step = 0.0
         self._drawn_key = None
         self._closed = False
-        self.speed = tk.StringVar(value="средне")
+        self.speed = "medium"           # ключ SPEEDS
         self.book = OpeningBook()
         self.analyzer = Analyzer(engine_path)
 
@@ -194,18 +198,19 @@ class ReviewWindow(BoardView):
 
         row = ttk.Frame(side)
         row.pack(fill="x", pady=(8, 0))
-        ttk.Button(row, text="★ Лучший ход", command=self.play_best).pack(side="left")
-        self.auto_btn = ttk.Button(row, text="⏵ Авто", command=self.toggle_auto)
+        ttk.Button(row, text=tr("★ Лучший ход"), command=self.play_best).pack(side="left")
+        self.auto_btn = ttk.Button(row, text="", command=self.toggle_auto)
         self.auto_btn.pack(side="left", padx=6)
-        ttk.Combobox(row, textvariable=self.speed, values=list(SPEEDS), width=9,
-                     state="readonly").pack(side="left")
+        self._sync_auto_btn()
+        Choice(row, SPEED_NAMES, self.speed, 9, lambda k: setattr(self, "speed", k)).pack(side="left")
 
         row2 = ttk.Frame(side)
         row2.pack(fill="x", pady=(6, 0))
-        for text, cmd in (("Открыть PGN", self.open_pgn), ("Сохранить PGN", self.save_pgn),
-                          ("Перевернуть", self.flip), ("Новая партия", self.new_game)):
+        for text, cmd in ((tr("Открыть PGN"), self.open_pgn), (tr("Сохранить PGN"), self.save_pgn),
+                          (tr("Перевернуть"), self.flip), (tr("Новая партия"), self.new_game)):
             ttk.Button(row2, text=text, command=cmd).pack(side="left", padx=(0, 4))
 
+        lang_choice(side, self._set_lang).pack(anchor="w", pady=(6, 0))
         self.status = ttk.Label(side, text="", foreground="#7d7a77", wraplength=360)
         self.status.pack(anchor="w", pady=(6, 0))
 
@@ -261,12 +266,12 @@ class ReviewWindow(BoardView):
     def play_best(self):
         b = self.board_at(self.ply)
         if b.is_game_over():
-            self.status.config(text="Партия окончена.")
+            self.status.config(text=tr("Партия окончена."))
             return False
         res = self.analyzer.get(b.fen())
         if res is None or res["best"] is None:
             self.want_best = True
-            self.status.config(text="Stockfish считает лучший ход...")
+            self.status.config(text=tr("Stockfish считает лучший ход..."))
             return False
         self.want_best = False
         best = res["best"]
@@ -284,7 +289,7 @@ class ReviewWindow(BoardView):
         self._sync_auto_btn()
 
     def _sync_auto_btn(self):
-        self.auto_btn.config(text="⏸ Пауза" if self.auto else "⏵ Авто")
+        self.auto_btn.config(text=tr("⏸ Пауза") if self.auto else tr("⏵ Авто"))
 
     def flip(self):
         self.flipped = not self.flipped
@@ -300,12 +305,12 @@ class ReviewWindow(BoardView):
         self._positions_changed()
 
     def new_game(self):
-        self.set_game(chess.Board(), [], "новая партия")
+        self.set_game(chess.Board(), [], tr("новая партия"))
 
     # ---------------- PGN ----------------
     def open_pgn(self):
-        path = filedialog.askopenfilename(parent=self.win, title="Открыть партию",
-                                          filetypes=[("PGN", "*.pgn"), ("Все файлы", "*.*")])
+        path = filedialog.askopenfilename(parent=self.win, title=tr("Открыть партию"),
+                                          filetypes=[("PGN", "*.pgn"), (tr("Все файлы"), "*.*")])
         if path:
             self.load_pgn(path)
 
@@ -314,17 +319,17 @@ class ReviewWindow(BoardView):
             with open(path, encoding="utf-8-sig", errors="replace") as f:
                 game = chess.pgn.read_game(f)
         except OSError as e:
-            messagebox.showerror("Virtual Game Review", f"Не удалось открыть файл:\n{e}", parent=self.win)
+            messagebox.showerror("Virtual Game Review", tr("Не удалось открыть файл:\n{e}", e=e), parent=self.win)
             return
         if game is None:
-            messagebox.showerror("Virtual Game Review", "В файле нет партии.", parent=self.win)
+            messagebox.showerror("Virtual Game Review", tr("В файле нет партии."), parent=self.win)
             return
         h = game.headers
         self.set_game(game.board(), list(game.mainline_moves()),
                       f"{h.get('White', '?')} — {h.get('Black', '?')}  {h.get('Result', '')}".strip())
 
     def save_pgn(self):
-        path = filedialog.asksaveasfilename(parent=self.win, title="Сохранить партию",
+        path = filedialog.asksaveasfilename(parent=self.win, title=tr("Сохранить партию"),
                                             defaultextension=".pgn", filetypes=[("PGN", "*.pgn")])
         if not path:
             return
@@ -342,7 +347,7 @@ class ReviewWindow(BoardView):
                 node.comment = f"[%eval {res['score']}]" if not res["score"].startswith(("1-", "0-")) else ""
         with open(path, "w", encoding="utf-8") as f:
             print(game, file=f)
-        self.status.config(text=f"Сохранено: {path}")
+        self.status.config(text=tr("Сохранено: {path}", path=path))
 
     # ---------------- оценки ----------------
     def verdict(self, ply):
@@ -369,7 +374,7 @@ class ReviewWindow(BoardView):
             now = time.time()
             if self.want_best:
                 self.play_best()
-            elif self.auto and now - self._last_step >= SPEEDS[self.speed.get()]:
+            elif self.auto and now - self._last_step >= SPEEDS[self.speed]:
                 if self.ply < len(self.moves):
                     self.goto(self.ply + 1)
                     self._last_step = now
@@ -412,7 +417,7 @@ class ReviewWindow(BoardView):
         head = "Virtual Game Review"
         if self.title:
             head += f"  ·  {self.title}"
-        head += f"  ·  ход {self.ply}/{len(self.moves)}"
+        head += "  ·  " + tr("ход {ply}/{n}", ply=self.ply, n=len(self.moves))
         if opening:
             head += f"  ·  ≡ {opening}"
         self.banner.config(text=head)
@@ -421,28 +426,31 @@ class ReviewWindow(BoardView):
         outcome = board.outcome(claim_draw=True)
         if outcome is not None:
             self.eval_lbl.config(text=outcome.result())
-            self.best_lbl.config(text=f"Партия окончена: {REASONS.get(outcome.termination, '')}")
+            self.best_lbl.config(text=tr("Партия окончена: {reason}",
+                                         reason=tr(REASONS.get(outcome.termination, "конец партии"))))
             self.pv_lbl.config(text="")
         elif res:
             self.eval_lbl.config(text=res["score"])
-            side = "белых" if board.turn else "чёрных"
-            self.best_lbl.config(text=f"Лучший ход {side}: {res['san']}")
-            self.pv_lbl.config(text="Вариант: " + " ".join(res["pv"]) + f"   (глубина {res['depth']})")
+            best = tr("Лучший ход белых: {san}") if board.turn else tr("Лучший ход чёрных: {san}")
+            self.best_lbl.config(text=best.format(san=res["san"]))
+            self.pv_lbl.config(text=tr("Вариант: {pv}   (глубина {depth})", pv=" ".join(res["pv"]),
+                                       depth=res["depth"]))
         else:
             self.eval_lbl.config(text="…")
-            self.best_lbl.config(text="Stockfish считает...")
+            self.best_lbl.config(text=tr("Stockfish считает..."))
             self.pv_lbl.config(text="")
         if j and j["kind"] in config.MARK_COLORS:
             self.verdict_lbl.config(text=verdict_text(j), foreground=config.MARK_COLORS[j["kind"]])
         elif j:
-            self.verdict_lbl.config(text=f"{j['san']}: нормальный ход", foreground="#c9c6c2")
+            self.verdict_lbl.config(text=tr("{san}: нормальный ход", san=j["san"]), foreground="#c9c6c2")
         else:
             self.verdict_lbl.config(text="")
 
         self._draw_moves(verdicts)
         err = self.analyzer.error
-        self.status.config(text=err or (f"Анализ партии: {done}/{total} позиций" if done < total else
-                                        "Партия разобрана.  ← → Home End — листать, пробел — авто, B — лучший ход"))
+        self.status.config(text=err or (tr("Анализ партии: {done}/{total} позиций", done=done, total=total)
+                                        if done < total else
+                                        tr("Партия разобрана.  ← → Home End — листать, пробел — авто, B — лучший ход")))
 
     def _draw_moves(self, verdicts):
         t = self.text
@@ -465,11 +473,27 @@ class ReviewWindow(BoardView):
             t.tag_bind(tag, "<Button-1>", lambda e, p=ply: self.goto(p))
             b.push(m)
         if not self.moves:
-            t.insert("end", "Ходов нет. ▶ или «★ Лучший ход» — сыграть лучший ход, «⏵ Авто» — доиграть партию.",
+            t.insert("end", tr("Ходов нет. ▶ или «★ Лучший ход» — сыграть лучший ход, «⏵ Авто» — доиграть партию."),
                      "num")
         t.config(state="disabled")
         if self.ply:
             t.see(f"m{self.ply}.first")
+
+    def _set_lang(self, code):
+        if self.on_lang is not None:          # окно открыто из главного — меняем язык везде
+            self.on_lang(code)
+            return
+        i18n.set_lang(code, save=True)
+        self.win.after(10, self.rebuild)
+
+    def rebuild(self):
+        """Пересоздать виджеты окна (смена языка)."""
+        if self._closed:
+            return
+        for w in self.win.winfo_children():
+            w.destroy()
+        self._build()
+        self._drawn_key = None
 
     def close(self):
         if self._closed:

@@ -12,7 +12,10 @@ import time
 import chess
 import chess.engine
 
-SPEEDS = {"быстро": 0.3, "средне": 1.0, "медленно": 3.0}   # секунд на ход
+from .i18n import tr
+
+SPEEDS = {"fast": 0.3, "medium": 1.0, "slow": 3.0}     # секунд на ход
+SPEED_NAMES = {"fast": "быстро", "medium": "средне", "slow": "медленно"}
 MAX_PLIES = 400
 
 REASONS = {
@@ -92,10 +95,10 @@ class SelfPlay(threading.Thread):
             while not self._halt.is_set():
                 outcome = self.board.outcome(claim_draw=True)
                 if outcome is not None:
-                    self.result = f"{outcome.result()} ({REASONS.get(outcome.termination, 'конец партии')})"
+                    self.result = f"{outcome.result()} ({tr(REASONS.get(outcome.termination, 'конец партии'))})"
                     break
                 if len(self.sans) >= MAX_PLIES:
-                    self.result = "остановлено: слишком длинная партия"
+                    self.result = tr("остановлено: слишком длинная партия")
                     break
                 t0 = time.time()
                 picked = self.book.pick(self.board) if self.book is not None else None
@@ -118,7 +121,7 @@ class SelfPlay(threading.Thread):
                 # движок мог ответить быстрее (например, единственный ход) — держим темп
                 self._halt.wait(max(0.0, self.move_time - (time.time() - t0)))
         except Exception as e:
-            self.error = f"Самоигра остановлена: {e}"
+            self.error = tr("Самоигра остановлена: {e}", e=e)
         finally:
             if engine is not None:
                 try:

@@ -14,6 +14,7 @@ import time
 import chess
 
 from . import blacklist, config, winutil
+from .i18n import tr
 from .capture import ScreenGrabber
 from .detector import find_board
 from .recognizer import CalibrationError, Recognizer
@@ -39,7 +40,7 @@ class Scanner(threading.Thread):
         self.board_rel = None                   # (x, y, size) доски внутри окна
         self.recognizer = None
         self.flipped = False
-        self.status = "Запуск..."
+        self.status = tr("Запуск...")
         self.tracker = PositionTracker()
         self.paused = False
         self.fails = 0
@@ -95,7 +96,7 @@ class Scanner(threading.Thread):
                     try:
                         self._scan()
                     except Exception as e:      # не роняем поток из-за одного кадра
-                        self._set_status(f"Ошибка: {e}")
+                        self._set_status(tr("Ошибка: {e}", e=e))
             time.sleep(max(0.02, config.SCAN_INTERVAL - (time.time() - t0)))
 
     def _set_status(self, s):
@@ -107,17 +108,18 @@ class Scanner(threading.Thread):
         """quick=True: при автопоиске сначала проверяем текущее окно (быстро)."""
         self.last_detect = time.time()
         if not quick:
-            self._set_status("Ищу доску..." if not self.external else "Ищу доску во всех окнах...")
+            self._set_status(tr("Ищу доску...") if not self.external else tr("Ищу доску во всех окнах..."))
         self.blocked = None
         found = self._detect_window(quick) if self.external else self._detect_screen()
         if not found and not quick:
             with self.lock:
                 self.region = None
             if self.blocked:
-                self._set_status(blacklist.MESSAGE)
+                self._set_status(tr(blacklist.MESSAGE))
             else:
-                self._set_status("Доска не найдена. Откройте доску или выделите её вручную"
-                                 + (f" (повтор каждые {self.auto_find_time:g} с)" if self.auto_find else "."))
+                self._set_status(tr("Доска не найдена. Откройте доску или выделите её вручную")
+                                 + (tr(" (повтор каждые {sec:g} с)", sec=self.auto_find_time)
+                                    if self.auto_find else "."))
         elif not found and quick:
             return self._detect(quick=False) if self.external else False
         return found
@@ -135,7 +137,7 @@ class Scanner(threading.Thread):
         prev = self.region
         self._set_region(region)
         if prev is None or max(abs(a - b) for a, b in zip(prev, region)) > 3:
-            self._set_status(f"Доска найдена на экране: {s}x{s} px")
+            self._set_status(tr("Доска найдена на экране: {s}x{s} px", s=s))
         return True
 
     def _detect_window(self, quick):
@@ -163,7 +165,7 @@ class Scanner(threading.Thread):
                 self.auto_region = True
             self.fails = 0
             if not quick:
-                self._set_status(f"Доска найдена в окне «{title[:40]}»: {s}x{s} px")
+                self._set_status(tr("Доска найдена в окне «{title}»: {s}x{s} px", title=title[:40], s=s))
             return True
         return False
 
@@ -181,7 +183,7 @@ class Scanner(threading.Thread):
         if not winutil.window_usable(self.hwnd):
             with self.lock:
                 self.visible = False
-            self._set_status("Окно с доской свёрнуто или закрыто")
+            self._set_status(tr("Окно с доской свёрнуто или закрыто"))
             if not self.hwnd or not winutil.user32.IsWindow(self.hwnd):
                 self._detect()
             return None
@@ -216,7 +218,7 @@ class Scanner(threading.Thread):
         self.blocked = reason
         self.last_detect = time.time()
         self.on_position(None)
-        self._set_status(blacklist.MESSAGE)
+        self._set_status(tr(blacklist.MESSAGE))
         return False
 
     def _scan(self):
@@ -229,15 +231,15 @@ class Scanner(threading.Thread):
             try:
                 self._calibrate(img)
             except CalibrationError:
-                self._set_status("Нужна калибровка: поставьте начальную позицию "
-                                 "(новая партия) — откалибруется автоматически")
+                self._set_status(tr("Нужна калибровка: поставьте начальную позицию "
+                                    "(новая партия) — откалибруется автоматически"))
             return
         placement, unknown = self.recognizer.read(img, self.flipped)
         b = chess.Board(placement)
         kings_ok = len(b.pieces(chess.KING, chess.WHITE)) == 1 and len(b.pieces(chess.KING, chess.BLACK)) == 1
         if unknown > 1 or not kings_ok:
             self.fails += 1
-            self._set_status(f"Не распознаётся позиция ({self.fails})")
+            self._set_status(tr("Не распознаётся позиция ({n})", n=self.fails))
             if self.fails >= config.REDETECT_AFTER_FAILS and self.auto_region:
                 self.fails = 0
                 self._detect()
@@ -253,15 +255,14 @@ class Scanner(threading.Thread):
         if board is None:
             return
         if not board.is_valid():
-            self._set_status("Позиция невозможна по правилам (проверьте калибровку / чей ход)")
+            self._set_status(tr("Позиция невозможна по правилам (проверьте калибровку / чей ход)"))
             self.on_position(None)
             return
         if board.is_game_over():
-            self._set_status("Партия окончена: " + board.result())
+            self._set_status(tr("Партия окончена: {result}", result=board.result()))
             self.on_position(None)
             return
-        side = "белых" if board.turn else "чёрных"
-        self._set_status(f"Слежу за доской. Ход {side}.")
+        self._set_status(tr("Слежу за доской. Ход белых.") if board.turn else tr("Слежу за доской. Ход чёрных."))
         self.on_position(board.copy())
 
     def _calibrate(self, img):
@@ -271,7 +272,7 @@ class Scanner(threading.Thread):
             self.recognizer, self.flipped = rec, flipped
             self.tracker.reset()
             self.tracker.default_turn = chess.BLACK if flipped else chess.WHITE
-        self._set_status("Калибровка готова (" + ("чёрные" if flipped else "белые") + " снизу)")
+        self._set_status(tr("Калибровка готова (чёрные снизу)") if flipped else tr("Калибровка готова (белые снизу)"))
 
     # ---------- команды ----------
     def _cmd_detect(self):
@@ -299,7 +300,7 @@ class Scanner(threading.Thread):
                     self.auto_region = False
                     self.tracker.reset()
                 self.fails = 0
-                self._set_status(f"Область задана вручную в окне «{winutil.window_title(hwnd)[:40]}»")
+                self._set_status(tr("Область задана вручную в окне «{title}»", title=winutil.window_title(hwnd)[:40]))
                 return
         vl, vt, vw, vh = self.grab.virtual_screen()
         cl, ct = max(vl, x - m), max(vt, y - m)
@@ -318,7 +319,7 @@ class Scanner(threading.Thread):
             self.auto_region = False
             self.tracker.reset()
         self.fails = 0
-        self._set_status(f"Область задана вручную: {region[2]}x{region[2]} px")
+        self._set_status(tr("Область задана вручную: {s}x{s} px", s=region[2]))
 
     def _cmd_calibrate(self):
         if self.region is None and not self._detect():
@@ -351,4 +352,4 @@ class Scanner(threading.Thread):
     def _cmd_pause(self, value):
         self.paused = bool(value)
         if self.paused:
-            self._set_status("Пауза")
+            self._set_status(tr("Пауза"))
